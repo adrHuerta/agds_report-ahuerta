@@ -1,0 +1,183 @@
+---
+title: "Chapter 9 (Stepwise regression) - Report Exercise"
+author: "Adrian Huerta"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, messages = FALSE, warning = FALSE)
+rm(list = ls())
+```
+
+## Exploring the stepwise forward regression using the FLUXNET2015 Dataset
+
+In this report I will explore the stepwise forward regression from scratch by modelling the Gross Primary Production (GPP) as a function of environmental predictors.
+
+The algorithm of the stepwise forward regression goes as follow:
+
+1. Set the number of predictors to be considered to p = 1.
+2. Fit all regression models with predictors and compute their R2 (coefficient of determination). 
+3. Select the model with p predictors that achieves the highest R2 (best fitting model) and compute its AIC (Akaike Information Criterion).
+4. Increment to p + 1. Fit all regression models with p + 1 predictors that include the predictor selected at the previous step and compute their R2. Select the best fitting model and compute its AIC.
+5. If the AIC of the model with p + 1 predictors is poorer than the AIC of the model with p predictors, retain the model with p predictors and quit. You have found the (presumably) optimal model. Otherwise, continue with with step 4.
+
+Considering the above, I cover in this report to key points:
+
+- An evaluation of all bivariate models (single predictor), implementing just steps 1-3 of the algorithm. This should be complemented by a visualization and a brief discussion of the results.
+
+- An implementation of stepwise forward regression, and a visualization and discussion of its results.
+
+### Loading libraries, reading data and cleaning
+
+The raw data that I am using comes from the FLUXNET2015 Dataset (https://fluxnet.org/data/fluxnet2015-dataset/fullset-data-product/), which collects environmental variables from multiple regional flux networks worldwide.
+
+Prior to modeling, I conducted data exploration and cleaning. Specifically, I checked for missing values and removed unnecessary columns. All data are at a daily temporal resolution and span four different FLUXNET sites. Missing data were handled using a complete case analysis approach, and the "TIMESTAMP" and "siteid" columns were removed as they were not used in modeling (assuming that I am building a global model).
+
+The target variable for modeling is Gross Primary Production (GPP), which is stored in the column "GPP_NT_VUT_REF".
+
+```{r code01, message=FALSE, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+
+flux_data <- readr::read_csv("../data-raw/df_for_stepwise_regression.csv")
+
+# removing gaps using the complete case analysis approach 
+flux_data <- flux_data[complete.cases(flux_data), ]
+
+# checking the type of data
+# str(flux_data)
+# unique(flux_data$siteid)
+
+# clean data
+flux_data <- flux_data[, -c(1, 2)]
+```
+
+### Bivariate models
+
+In this section, I implemented a code to evaluate all the bivariate models using as target variable GPP. For each bivariate model it was computed the AIC and R2 which is shown in Figure 1. From these results, it is evident that photosynthetic photon flux density (PPFD_IN) is the most informative single predictor, achieving both the highest R2 (close to 0.3) and the lowest AIC. However, even for PPFD_IN, the R2 remains relatively modest, indicating that GPP is influenced by multiple environmental drivers. The next important predictors were shortwave radiation (SW_IN_F) and air temperature (TA_F). 
+
+Upon further inspection using the pairs() function, I found that many variables with the suffix "_MDS" were nearly identical to their counterparts ending in "_F". For example, TA_F and TA_F_MDS or SW_IN_F and SW_IN_F_MDS were virtually indistinguishable, which was also reflected in their similar R2 and AIC values.
+
+Reading more about the FLUXNET2015 documentation, TA_F represents air temperature consolidated from TA_F_MDS (air temperature, gap-filled using MDS method) and TA_ERA (air temperature, downscaled from ERA). So it looks like for these sites is the same data. Considering this outcome, I remove the same variables that contains "_MDS" and retain the ones that contains "_F", despite that there others that does not necessarily contain the same data. This will make more interpretative the model and results.
+
+```{r code02, message=FALSE, warning=FALSE, fig.align='center', fig.width=7, fig.height=3.5}
+
+predictors <- setdiff(names(flux_data), "GPP_NT_VUT_REF")
+
+biv_res <- data.frame(predictor = character(), R2 = numeric(), AIC = numeric())
+
+# Bivariate models 
+for (var in predictors) {
+  model <- lm(as.formula(paste("GPP_NT_VUT_REF ~", var)), data = flux_data)
+  r2 <- summary(model)$r.squared
+  aic <- AIC(model)
+  biv_res <- rbind(biv_res, data.frame(predictor = var, R2 = r2, AIC = aic))
+}
+
+# Data to plot
+biv_res <- biv_res[order(biv_res$R2, decreasing = TRUE), ]
+biv_res$predictor <- factor(biv_res$predictor, levels = biv_res$predictor)
+biv_res_tidy <- tidyr::pivot_longer(
+  data = biv_res,
+  cols = c("R2", "AIC"),
+  names_to = "Metric",
+  values_to = "Value")
+
+# Visualization
+ggplot(biv_res_tidy, aes(x = predictor, y = Value)) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~ Metric, scale = "free_x") +
+  xlab("Predictor") + ylab("Metric") +
+  theme_bw()
+```
+<center>
+*Figure 1. AIC and R2 values for the multiple bivariate models (GPP versus predictor).*
+</center>
+
+
+### Stepwise forward regression
+
+This section implements the full stepwise forward regression algorithm. For each model, I computed the AIC and selected the one with the lowest value. The AIC and predictor selected at each step were stored in a data frame and visualized in Figure 2.
+
+Overall, the algorithm shows a progressive decrease in AIC with each additional predictor, indicating improved model fit. However, the AIC plateaus after step 6, suggesting that including more than six predictors offers not substantial improvement. This indicates a simple model for GPP can be built using only the following six variables:
+
+- PPFD_IN
+- Incoming long wave radiation (LW_IN_F)
+- Vapor pressure deficit (VPD_F)
+- TA_F
+- Wind speed (WS_F), and
+- Friction velocity (USTAR)
+
+I repeated the same process without removing the "_MDS" variables. Interestingly, the results were quite similar. This suggests that the stepwise regression method can implicitly recognize collinearity by avoiding redundant variables; for example, selecting either TA_F or TA_F_MDS, but not both.
+
+```{r code03, message=FALSE, warning=FALSE, fig.align='center', fig.width=7, fig.height=3.5}
+
+flux_data <- flux_data[, -match(c("TA_F_MDS", "SW_IN_F_MDS", "LW_IN_F_MDS", "VPD_F_MDS"), colnames(flux_data))]
+
+# Setting initial step: GPP only with intercept
+current_predictors <- c()
+remaining_predictors <- setdiff(names(flux_data), "GPP_NT_VUT_REF")
+best_model <- lm(GPP_NT_VUT_REF ~ 1, data = flux_data)
+best_aic <- AIC(best_model)
+# df where is stored the results
+aic_df <- data.frame(step = 0, predictor = "Intercept", AIC = best_aic)
+max_step <- ncol(flux_data) - 1
+
+# Loop
+for (step in 1:max_step){
+  
+  test_results <- data.frame(predictor = character(), aic = numeric(), formula = character())
+  
+  # loop over each model
+  for (var in remaining_predictors) {
+    candidate_formula <- as.formula(paste("GPP_NT_VUT_REF ~", paste(c(current_predictors, var), collapse = " + ")))
+    model <- lm(candidate_formula, data = flux_data)
+    test_results <- rbind(test_results, data.frame(
+      predictor = var,
+      aic = AIC(model),
+      formula = deparse(candidate_formula)
+    ))
+  }
+  
+  best_candidate <- test_results %>% arrange(aic) %>% slice(1)
+  
+  # condition based on best aic
+  if (best_candidate$aic >= best_aic) break
+  
+  # update initial step
+  current_predictors <- c(current_predictors, best_candidate$predictor)  # ensuring model with the best previous
+  remaining_predictors <- setdiff(remaining_predictors, best_candidate$predictor) # predictor
+  best_aic <- best_candidate$aic
+  aic_df <- rbind(aic_df, data.frame(
+    step = step,
+    predictor = best_candidate$predictor,
+    AIC = best_aic
+  ))
+  
+}
+
+# Visualization
+aic_df$predictor <- factor(aic_df$predictor, levels = aic_df$predictor)
+
+ggplot(aic_df, aes(x = step, y = AIC)) +
+  geom_point(shape = 19) +
+  geom_line() +
+  scale_x_continuous(breaks = seq(0, 10, 1),
+                     sec.axis = dup_axis(name = "predictor", labels = aic_df$predictor)) +
+  theme_bw()
+```
+<center>
+*Figure 2. AIC values for each step of stepwise forward regression between GPP and environmental variables (predictor).*
+</center>
+
+### Summary
+
+This report explored GPP modeling using stepwise forward regression on the FLUXNET2015 dataset. The key findings are:
+
+- PPFD_IN is the strongest single predictor of GPP, but a combination of variables is needed for better predictive performance.
+
+- Stepwise forward regression identified a 6-variable model as the most effective trade-off between model complexity and fit efficiency.
+
+- Redundant variables (e.g., TA_F vs. TA_F_MDS) were effectively handled through either preprocessing or model selection itself.

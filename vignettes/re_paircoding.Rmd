@@ -1,0 +1,18 @@
+---
+title: "Chapter 8 (Collaborating with git)  - Report Exercise"
+author: "Adrian Huerta"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, messages = FALSE, warning = FALSE)
+rm(list = ls())
+```
+
+## Collaborative Work on Github
+
+I team up this excersise with Setareh Amini.
+
+* The repository I forked from Setareh: https://github.com/adrHuerta/re_paircoding_SetarehAdrian
+* My repository that Setareh forked: https://github.com/adrHuerta/adgs-8_code_management

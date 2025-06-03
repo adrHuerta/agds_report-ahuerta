@@ -1,0 +1,224 @@
+---
+title: "Chapter 5 (Air quality data visualisation) - Report Exercise"
+author: "Adrian Huerta"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, messages = FALSE, warning = FALSE)
+rm(list = ls())
+library(ggplot2)
+```
+
+## Exploring the seasonal dynamics of ozone in New York (1973)
+
+In this exercise, we explore the seasonal variability of ozone concentration in New York during the months of May to September 1973, using the built-in R dataset airquality. The dataset comes from the New York State Department of Conservation and contains daily air quality measurements collected in New York City. The target variable is ozone, which we investigate in relation to meteorological variables such as solar radiation, wind speed, and maximum air temperature. These variables provide the basis to address the following question: 
+
+**How do meteorological conditions and seasonal patterns influence daily ozone concentration in New York during the summer of 1973?**
+
+### Data description
+
+The airquality dataset consists of daily measurements from May to September 1973, and include different variables (Table 1). Due to these variables are in unit that not belong to SI units, we transformed them into SI units to enhance clarity and interpretation. We also checked the dataset for missing values. Ozone and Solar.R contain some missing entries, which were handled appropriately (complete case analysis) during the analysis to avoid distortion of statistical results. 
+
+```{r data0, message = FALSE, echo = FALSE, warning = FALSE}
+description_df <- data.frame(
+  "Variable" = c("Ozone", "Solar.R", "Wind", "Temp", "Month", "Day"),
+  "Description" = c("Mean ozone in parts per billion (ppb)", "Solar radiation", "Wind speed", "Maximum daily temperature", "Month (1–12)", "Day of the month"),
+  "Units_raw" = c("ppb", "Langley/day", "miles per hour (mph)", "degrees Fahrenheit (°F)", "-", "-"),
+  "Units_con" = c("μg/m³ (1 ppb = 1.96 μg/m³)", "MJ/m²/day (1 Langley = 0.04184 MJ)", "meters per second (m/s)", "degrees Celsius (°C)", "-", "-")
+)
+
+colnames(description_df) <- c("Variable", "Description", "Units (original)", "Units (converted)")
+rownames(description_df) <- NULL
+
+# Nice table
+knitr::kable(description_df)
+```
+<center>
+*Table 1. Description of the airquality dataset: variable name, original units, and converted units.*
+</center>
+
+```{r data1, message = FALSE, echo = FALSE, warning = FALSE}
+airquality_df <- datasets::airquality
+
+# Convert units to SI
+airquality_df$Ozone <- airquality_df$Ozone * 1.96                
+airquality_df$Temp <- (airquality_df$Temp - 32) * (5/9)
+airquality_df$Wind <- airquality_df$Wind * 0.44704
+airquality_df$Solar.R <- airquality_df$Solar.R * 0.04184
+
+# Removing rows that have missing data and to tidy
+airquality_df <- airquality_df[complete.cases(airquality_df), ]
+airquality_df2 <- tidyr::pivot_longer(
+  data = airquality_df,
+  cols = c("Ozone", "Solar.R", "Wind", "Temp"),
+  names_to = "Variable",
+  values_to = "Value")
+```
+<pre>
+</pre>
+### Basic statistics
+
+To underastad the data at first, we summarize basic metrics for the cleaned dataset: mean, min, max and standard deviation for all variables (Table 2).
+
+```{r table data, echo= FALSE, message=FALSE, warning=FALSE}
+summary_df <- data.frame(
+  Variable = c("Ozone (μg/m³)", "Solar Radiation (MJ/m²/day)", "Wind Speed (m/s)", "Temperature (°C)"),
+  Mean = sapply(airquality_df[, -c(5, 6)], mean),
+  SD = sapply(airquality_df[, -c(5, 6)], sd),
+  Min = sapply(airquality_df[, -c(5, 6)], min),
+  Max = sapply(airquality_df[, -c(5, 6)], max)
+)
+
+rownames(summary_df) <- NULL
+
+# Nice table
+knitr::kable(summary_df, 
+             digits = 2)
+```
+<center>
+*Table 2. Basic statistics (mean, min, max and standard deviation [SD]) of Ozone and meteorological variables.*
+</center>
+<pre>
+</pre>
+Ozone levels show substantial day-to-day variability, as indicated by the relatively high standard deviation. This suggests that ozone concentration is sensitive to changing daily conditions. Additionally, the presence of extreme values points to potential ozone spikes, likely outliers, — which may be linked to specific weather events or unusual combinations of meteorological variables. Solar.R also varies considerably, with some days recording values near zero, likely corresponding to fully overcast or rainy days. In contrast, Wind displays relatively low variability, suggesting more stable wind conditions throughout the summer months. Finally, Temp seems to falls within the expected range for summer in New York.
+
+### Seasonal patterns
+
+To explore how ozone and related meteorological variables vary over the summer months, we created boxplots grouped by month (from May to September) for Ozone and meteorological variables. These plots help reveal seasonal trends, variability, and potential outliers.
+
+The boxplots by month reveal clear seasonal patterns (Table 2): Mean Ozone levels rise from May, peak in July, and decline through September, following the variability of increasing Temp and Solar.R. August shows the greatest variability, indicating more frequent spikes but also others present in May and September. Temp steadily increases until July, then decline, while Solar.R follows a similar curve but less obvious and with higher variability. Wind remains relatively stable but slightly lower in midsummer, which may contribute to ozone accumulation. These patterns suggest that warmer, sunnier, and less windy conditions in midsummer promote higher Ozone concentrations.
+
+```{r boxplot, echo=FALSE, fig.align='center', fig.width=7, fig.height=3.5}
+
+ggplot(airquality_df2) + 
+  geom_boxplot(aes(x = factor(Month), y = Value)) + 
+  facet_wrap(~ Variable, scales = "free_y") + 
+  theme_bw() + 
+  xlab("Month")
+```
+<center>
+*Figure 1. Monthly variability of daily Ozone and meteorological variables from May (5) to September (9) of 1973. Value units are the same as in Table 2.*
+</center>
+</pre>
+
+### Relationship of Ozone and meteorological variables
+
+To better understand how each meteorological variable influences Ozone concentration, we created scatterplots with linear regression lines. These plots help visualize the direction and strength of the relationships between Ozone and Temp, Wind, and Solar.R.
+
+Ozone shows a strong positive correlation with Temp (Figure 2), indicating that higher temperatures are associated with increased ozone levels, likely due to enhanced photochemical activity. In contrast, ozone has a negative relationship with Wind, suggesting that stronger winds help disperse ozone and reduce its concentration (Figure 3). The relationship between Ozone and Solar.R is moderately positive but more scattered, possibly due unmeasured factors influencing ozone formation (Figure 4). Overall, these patterns support the idea that heat and sunlight drive ozone production, while wind acts as a dispersing force.
+
+```{r scatterplot02, message = FALSE, echo=FALSE, fig.align='center', fig.width=6, fig.height=4.5}
+
+model <- lm(Ozone ~ Temp, data = airquality_df)
+intercept <- round(coef(model)[1], 2)
+slope <- round(coef(model)[2], 2)
+
+eq <- paste0("Ozone = ", slope, " * Temp + ", "(",intercept, ")")
+
+r <- round(cor(airquality_df$Temp, airquality_df$Ozone), 2)
+cor_text <- paste("R =", r)
+
+x_pos <- min(airquality_df$Temp)
+y_pos <- max(airquality_df$Ozone) - 20
+
+ggplot(airquality_df, aes(x = Temp, y = Ozone)) +
+  geom_point(color = "blue", alpha = 0.6) +
+  geom_smooth(method = "lm", color = "red", se = TRUE) +
+  annotate("text", x = x_pos, y = y_pos, label = eq, hjust = 0, size = 5, color = "black") +
+  annotate("text", x = x_pos, y = y_pos - 25, label = cor_text, hjust = 0, size = 5, color = "black") +
+  labs(
+    x = "Temperature (°C)",
+    y = "Ozone (μg/m³)"
+  ) +
+  theme_bw()
+```
+<center>
+*Figure 2. Daily relationship between Ozone and Temp during the summer of 1973. Red line represent the fitted linear regression between both variables. Liner regression model and Pearson correlation are also shown.*
+</center>
+
+```{r scatterplot03, message = FALSE, echo=FALSE, fig.align='center', fig.width=6, fig.height=4.5}
+
+model <- lm(Ozone ~ Wind, data = airquality_df)
+intercept <- round(coef(model)[1], 2)
+slope <- round(coef(model)[2], 2)
+
+eq <- paste0("Ozone = ", slope, " * Wind + ", "(",intercept, ")")
+
+r <- round(cor(airquality_df$Wind, airquality_df$Ozone), 2)
+cor_text <- paste("R =", r)
+
+x_pos <- max(airquality_df$Wind) - 5
+y_pos <- max(airquality_df$Ozone) - 20
+
+ggplot(airquality_df, aes(x = Wind, y = Ozone)) +
+  geom_point(color = "blue", alpha = 0.6) +
+  geom_smooth(method = "lm", color = "red", se = TRUE) +
+  annotate("text", x = x_pos, y = y_pos, label = eq, hjust = 0, size = 5, color = "black") +
+  annotate("text", x = x_pos, y = y_pos - 25, label = cor_text, hjust = 0, size = 5, color = "black") +
+  labs(
+    x = "Wind Speed (m/s)",
+    y = "Ozone (μg/m³)"
+  ) +
+  theme_bw()
+```
+<center>
+*Figure 3. Daily relationship between Ozone and Wind during the summer of 1973. Red line represent the fitted linear regression between both variables. Liner regression model and Pearson correlation are also shown.*
+</center>
+
+```{r scatterplot01, message = FALSE, echo=FALSE, fig.align='center', fig.width=6, fig.height=4.5}
+
+model <- lm(Ozone ~ Solar.R, data = airquality_df)
+intercept <- round(coef(model)[1], 2)
+slope <- round(coef(model)[2], 2)
+
+eq <- paste0("Ozone = ", slope, " * Solar.R + ", "(",intercept, ")")
+
+r <- round(cor(airquality_df$Solar.R, airquality_df$Ozone), 2)
+cor_text <- paste("R =", r)
+
+x_pos <- min(airquality_df$Solar.R)
+y_pos <- max(airquality_df$Ozone) - 20
+
+ggplot(airquality_df, aes(x = Solar.R, y = Ozone)) +
+  geom_point(color = "blue", alpha = 0.6) +
+  geom_smooth(method = "lm", color = "red", se = TRUE) +
+  annotate("text", x = x_pos, y = y_pos, label = eq, hjust = 0, size = 5, color = "black") +
+  annotate("text", x = x_pos, y = y_pos - 25, label = cor_text, hjust = 0, size = 5, color = "black") +
+  labs(
+    x = "Solar Radiation (MJ/m²/day)",
+    y = "Ozone (μg/m³)"
+  ) +
+  theme_bw()
+```
+<center>
+*Figure 4. Daily relationship between Ozone and Solar.R during the summer of 1973. Red line represent the fitted linear regression between both variables. Liner regression model and Pearson correlation are also shown.*
+</center>
+
+### Temporal variability of Ozone and meteorological variables
+
+To observe how ozone levels changed over time, we plotted a time series of daily Ozone together with the meteorological variables. The plot shows a clear seasonal trend, with Ozone gradually increasing through June and peaking in mid to late July, before declining toward September. Short-term fluctuations are also visible, reflecting day-to-day variability driven by changing weather conditions as seen by Temp, Wind and Solar.R. This pattern supports the idea that Ozone is influenced by both seasonal and transient meteorological factors.
+
+```{r ts0, message = FALSE, echo=FALSE, fig.align='center', fig.width=10, fig.height=4.5}
+
+airquality_df2$ymd <- as.Date(paste("1973", "-", airquality_df2$Month, "-", airquality_df2$Day, sep = ""))
+
+ggplot(airquality_df2, aes(x = ymd, y = Value)) +
+  geom_line(size = 0.1) +
+  geom_point() +
+  facet_wrap(~ Variable, scales = "free_y") + 
+  theme_bw()
+```
+<center>
+*Figure 5. Daily series of Ozone and meteorological variables during the summer of 1973. Value units are the same as in Table 2.*
+</center>
+
+## Summary
+
+The analysis reveals that Ozone concentration in New York during the summer of 1973 was significantly influenced by temperature and wind, with higher temperatures associated with increased ozone levels and stronger winds linked to lower concentrations due to pollutant dispersion. While solar radiation showed a positive relationship with ozone, this correlation was moderate and weaker than expected based on previous research (Yang et al., 2024), which typically finds a stronger link. Seasonal patterns revealed that ozone peaked in midsummer, coinciding with the warmest and sunniest periods. Overall, these results suggest that although temperature and wind play major roles in ozone variability, the influence of solar radiation in this dataset was curiously less pronounced, highlighting potential data limitations or other influencing factors. More data is needed to explore these outcomes.
+
+## Reference
+
+- Yang, Y., Zhou, Y., Wang, H., Li, M., Li, H., Wang, P., ... & Liao, H. (2024). Meteorological characteristics of extreme ozone pollution events in China and their future predictions. Atmospheric Chemistry and Physics, 24(2), 1177-1191.
+

@@ -1,0 +1,96 @@
+---
+title: "Chapter 4 (Tidy data) - Report Exercise"
+author: "Adrian Huerta"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, messages = FALSE, warning = FALSE)
+rm(list = ls())
+```
+
+
+## Analyzing changes in soil organic matter during elevated CO experiments
+
+In this report I explore the data from multiple ecosystem experiments that measure soil organic carbon under ambient and elevated CO2 concentrations. The purpose is to understand how the soil organic carbon changes over time with the elevated CO2 and if the soil carbon stocks increase, decrease or not change at all.
+
+### What are the data that you are looking at?
+
+The raw data that I am using comes from the study of Groenigen et al. 2014 (https://doi.org/10.1126/science.1249534). It contains  soil organic carbon values from different experiments around the world. Each experiment compares the soil organic carbon under:
+
+* ambient CO2 (current levels).
+* increased CO2 (increased anthropogenic levels).
+
+The data were taken at different time years (since the start of experiment), and include other type of information such the number of samples, the depth, treatment, among others.
+
+Before using the raw data, this was manually cleaned and converted to csv format for an ease reading in R. The data cleaning consisted on:
+
+* Removing empty rows or columns.
+* Fix any merged cells or inconsistent headers.
+* Ensure columns to be used in the computation process (Experiment, etc.) are clear.
+
+### What do you expect your analysis to show? What is your hypothesis? How should soil organic matter content change under elevated CO₂?
+
+After reading the paper, the hypothesis is that increasing atmospheric CO2 would lead to an increase in biomass and soil carbon stocks. Therefore, I would find in the data that:
+
+* There is an increase in soil organic carbon under increased CO2
+* But increased CO2 may also increase microbial decomposition, leading to a reduction in soil organic carbon.
+
+
+### Data analysis
+
+1. Loading data and libraries
+```{r code01, message=FALSE, warning=FALSE}
+library(dplyr)
+library(readr)
+
+groenigen_data <- read_csv("../data/1249534s1-s6_CLEAN.csv")
+head(groenigen_data)
+```
+
+2. Distinguish an early phase (<3 years since start), a mid-phase (3-6 years since start), and a late phase (>6 years since start).
+```{r code02, message=FALSE, warning=FALSE}
+groenigen_data$phase <- with(groenigen_data,
+                             ifelse(time < 3, "Early", ifelse(time <= 6, "Mid", "Late")))
+
+groenigen_data$phase <- factor(groenigen_data$phase, levels = c("Early", "Mid", "Late"))
+```
+
+3. Average ambient and elevated soil organic carbon by experiment and phase
+```{r code03, message=FALSE, warning=FALSE}
+groenigen_data_by_phase <- groenigen_data %>%
+  group_by(experiment, phase) %>%
+  summarise(
+    ambient_mean = mean(mean_amb_co2, na.rm = TRUE),
+    increased_mean = mean(mean_inc_co2, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+head(groenigen_data_by_phase)
+```
+
+4. Calculate log-response ratio for each experiment-phase pair by using: $$RR = ln( \frac{x_{elevated}}{x_{ambient}} )$$
+```{r code04, message=FALSE, warning=FALSE}
+groenigen_data_by_phase %>%
+  mutate(RR = log( increased_mean / ambient_mean )) %>%
+  group_by(phase) %>%
+  summarise(
+    RR = mean(RR, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  knitr::kable(digits = 5, caption = "Table 1. Log-response ratio for each experiment-phase.")
+```
+
+### Interpret your results after aggregating the data: What do your final numbers mean? Do they support your initial hypothesis? Why so, why not?
+
+After looking at the data for different time periods, I found that in the early phase of the experiments, there was almost no change in soil organic carbon between increased and normal CO2. In the middle phase, soil organic carbon increased a little under increased CO2, which may be because plants grow more and add more carbon to the soil. But in the late phase, soil organic carbon slightly decreased under elevated CO2. This means that over time, the effect of higher CO2 on storing carbon in the soil becomes smaller or even negative. The results seems to match the main conclusion of the original paper by Groenigen et al. (2014), which said that faster decomposition under elevated CO2 can cancel out the carbon stock in soil.
+
+As this was my first time working with this type of data, it would be helpful to compare my results with those from other colleagues. I feel confident that the code and analysis are correct, but seeing other approaches would help confirm my understanding.
+
+## Conclusion
+
+In summary, elevated CO2 appears to have a small and temporary effect on soil organic carbon, with slight increases in the mid phase but little or no long-term gain. These results support the idea that faster decomposition under elevated CO2 limits soil carbon storage, aligning with the findings of Groenigen et al. (2014).
+
+
+
