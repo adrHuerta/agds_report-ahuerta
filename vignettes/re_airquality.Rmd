@@ -13,13 +13,13 @@ library(ggplot2)
 
 ## Exploring the seasonal dynamics of ozone in New York (1973)
 
-In this exercise, we explore the seasonal variability of ozone concentration in New York during the months of May to September 1973, using the built-in R dataset airquality. The dataset comes from the New York State Department of Conservation and contains daily air quality measurements collected in New York City. The target variable is ozone, which we investigate in relation to meteorological variables such as solar radiation, wind speed, and maximum air temperature. These variables provide the basis to address the following question: 
+In this exercise, I explore the seasonal variability of ozone concentration in New York during the months of May to September 1973, using the built-in R dataset airquality. The dataset comes from the New York State Department of Conservation and contains daily air quality measurements collected in New York City. The target variable is ozone, which I investigate in relation to meteorological variables such as solar radiation, wind speed, and maximum air temperature. These variables provide the basis to address the following question: 
 
 **How do meteorological conditions and seasonal patterns influence daily ozone concentration in New York during the summer of 1973?**
 
 ### Data description
 
-The airquality dataset consists of daily measurements from May to September 1973, and include different variables (Table 1). Due to these variables are in unit that not belong to SI units, we transformed them into SI units to enhance clarity and interpretation. We also checked the dataset for missing values. Ozone and Solar.R contain some missing entries, which were handled appropriately (complete case analysis) during the analysis to avoid distortion of statistical results. 
+The airquality dataset consists of daily measurements from May to September 1973, and include different variables (Table 1). Due to these variables are in unit that not belong to SI units, I transformed them into SI units to enhance clarity and interpretation. I also checked the dataset for missing values. Ozone and Solar.R contain some missing entries, which were handled appropriately (complete case analysis) during the analysis to avoid distortion of statistical results. 
 
 ```{r data0, message = FALSE, echo = FALSE, warning = FALSE}
 description_df <- data.frame(
@@ -60,7 +60,7 @@ airquality_df2 <- tidyr::pivot_longer(
 </pre>
 ### Basic statistics
 
-To underastad the data at first, we summarize basic metrics for the cleaned dataset: mean, min, max and standard deviation for all variables (Table 2).
+To underastad the data at first, I summarize basic metrics for the cleaned dataset: mean, min, max and standard deviation for all variables (Table 2).
 
 ```{r table data, echo= FALSE, message=FALSE, warning=FALSE}
 summary_df <- data.frame(
@@ -86,7 +86,7 @@ Ozone levels show substantial day-to-day variability, as indicated by the relati
 
 ### Seasonal patterns
 
-To explore how ozone and related meteorological variables vary over the summer months, we created boxplots grouped by month (from May to September) for Ozone and meteorological variables. These plots help reveal seasonal trends, variability, and potential outliers.
+To explore how ozone and related meteorological variables vary over the summer months, I created boxplots grouped by month (from May to September) for Ozone and meteorological variables. These plots help reveal seasonal trends, variability, and potential outliers.
 
 The boxplots by month reveal clear seasonal patterns (Table 2): Mean Ozone levels rise from May, peak in July, and decline through September, following the variability of increasing Temp and Solar.R. August shows the greatest variability, indicating more frequent spikes but also others present in May and September. Temp steadily increases until July, then decline, while Solar.R follows a similar curve but less obvious and with higher variability. Wind remains relatively stable but slightly lower in midsummer, which may contribute to ozone accumulation. These patterns suggest that warmer, sunnier, and less windy conditions in midsummer promote higher Ozone concentrations.
 
@@ -105,7 +105,7 @@ ggplot(airquality_df2) +
 
 ### Relationship of Ozone and meteorological variables
 
-To better understand how each meteorological variable influences Ozone concentration, we created scatterplots with linear regression lines. These plots help visualize the direction and strength of the relationships between Ozone and Temp, Wind, and Solar.R.
+To better understand how each meteorological variable influences Ozone concentration, I created scatterplots with linear regression lines. These plots help visualize the direction and strength of the relationships between Ozone and Temp, Wind, and Solar.R.
 
 Ozone shows a strong positive correlation with Temp (Figure 2), indicating that higher temperatures are associated with increased ozone levels, likely due to enhanced photochemical activity. In contrast, ozone has a negative relationship with Wind, suggesting that stronger winds help disperse ozone and reduce its concentration (Figure 3). The relationship between Ozone and Solar.R is moderately positive but more scattered, possibly due unmeasured factors influencing ozone formation (Figure 4). Overall, these patterns support the idea that heat and sunlight drive ozone production, while wind acts as a dispersing force.
 
@@ -198,7 +198,7 @@ ggplot(airquality_df, aes(x = Solar.R, y = Ozone)) +
 
 ### Temporal variability of Ozone and meteorological variables
 
-To observe how ozone levels changed over time, we plotted a time series of daily Ozone together with the meteorological variables. The plot shows a clear seasonal trend, with Ozone gradually increasing through June and peaking in mid to late July, before declining toward September. Short-term fluctuations are also visible, reflecting day-to-day variability driven by changing weather conditions as seen by Temp, Wind and Solar.R. This pattern supports the idea that Ozone is influenced by both seasonal and transient meteorological factors.
+To observe how ozone levels changed over time, I plotted a time series of daily Ozone together with the meteorological variables. The plot shows a clear seasonal trend, with Ozone gradually increasing through June and peaking in mid to late July, before declining toward September. Short-term fluctuations are also visible, reflecting day-to-day variability driven by changing weather conditions as seen by Temp, Wind and Solar.R. This pattern supports the idea that Ozone is influenced by both seasonal and transient meteorological factors.
 
 ```{r ts0, message = FALSE, echo=FALSE, fig.align='center', fig.width=10, fig.height=4.5}
 

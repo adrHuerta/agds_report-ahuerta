@@ -1,0 +1,242 @@
+---
+title: "Chapter 10 (KNN) - Report Exerise"
+author: "Adrian Huerta"
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    toc: true 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, messages = FALSE, warning = FALSE)
+rm(list = ls())
+```
+
+# Comparison of the linear regression and KNN models
+
+In this report I explore the bias-variance trade-off in linear regression and KNN models.
+It is used data of ecosystem gross primary production (GPP) and a range of meteorological variables from the FLUXNET2015 dataset on Davos, Switzerland.
+
+## Adopting code from Chapter 10
+
+Loading libraries and sourcing the eval_model and mae_k_tradeoff functions
+
+```{r code00, message = FALSE, warning = FALSE}
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(tidyr)
+library(caret)
+library(recipes)
+
+source("../functions/eval_model.R")
+source("../functions/mae_k_tradeoff.R")
+```
+
+Reading FLUXNET2015 dataset for Davos (Switzerland), plus basic quality control and selection best variable values
+
+```{r code01, message = FALSE, warning = FALSE}
+daily_fluxes <- read_csv("../data-raw/FLX_CH-Dav_FLUXNET2015_FULLSET_DD_1997-2014_1-3.csv") |>
+
+  # select only the variables we are interested in
+  dplyr::select(TIMESTAMP,
+                GPP_NT_VUT_REF,    # the target
+                ends_with("_QC"),  # quality control info
+                ends_with("_F"),   # includes all all meteorological covariates
+                -contains("JSB")   # weird useless variable
+  ) |>
+
+  # convert to a nice date object
+  dplyr::mutate(TIMESTAMP = lubridate::ymd(TIMESTAMP)) |>
+
+  # set all -9999 to NA
+  mutate(across(where(is.numeric), ~na_if(., -9999))) |>
+
+  # retain only data based on >=80% good-quality measurements
+  # overwrite bad data with NA (not dropping rows)
+  dplyr::mutate(GPP_NT_VUT_REF = ifelse(NEE_VUT_REF_QC < 0.8, NA, GPP_NT_VUT_REF),
+                TA_F           = ifelse(TA_F_QC        < 0.8, NA, TA_F),
+                SW_IN_F        = ifelse(SW_IN_F_QC     < 0.8, NA, SW_IN_F),
+                LW_IN_F        = ifelse(LW_IN_F_QC     < 0.8, NA, LW_IN_F),
+                VPD_F          = ifelse(VPD_F_QC       < 0.8, NA, VPD_F),
+                PA_F           = ifelse(PA_F_QC        < 0.8, NA, PA_F),
+                P_F            = ifelse(P_F_QC         < 0.8, NA, P_F),
+                WS_F           = ifelse(WS_F_QC        < 0.8, NA, WS_F)) |>
+
+  # drop QC variables (no longer needed)
+  dplyr::select(-ends_with("_QC"))
+```
+
+Data splitting for train and test evaluation, plus data pre-processing 
+
+```{r code02a, message = FALSE, warning = FALSE}
+# Data splitting
+set.seed(1982)  # for reproducibility
+split <- rsample::initial_split(daily_fluxes, prop = 0.7, strata = "VPD_F")
+daily_fluxes_train <- rsample::training(split)
+daily_fluxes_test <- rsample::testing(split)
+
+# Model and pre-processing formulation, use all variables but LW_IN_F
+pp <- recipes::recipe(GPP_NT_VUT_REF ~ SW_IN_F + VPD_F + TA_F,
+                      data = daily_fluxes_train |> drop_na()) |>
+  recipes::step_BoxCox(recipes::all_predictors()) |>
+  recipes::step_center(recipes::all_numeric(), -recipes::all_outcomes()) |>
+  recipes::step_scale(recipes::all_numeric(), -recipes::all_outcomes())
+
+```
+
+Fitting of linear and KNN models
+
+```{r code02b, message = FALSE, warning = FALSE}
+# Fit linear regression model
+mod_lm <- caret::train(
+  pp,
+  data = daily_fluxes_train |> drop_na(),
+  method = "lm",
+  trControl = caret::trainControl(method = "none"),
+  metric = "RMSE"
+)
+
+# Fit KNN model
+mod_knn <- caret::train(
+  pp,
+  data = daily_fluxes_train |> drop_na(),
+  method = "knn",
+  trControl = caret::trainControl(method = "none"),
+  tuneGrid = data.frame(k = 8),
+  metric = "RMSE"
+)
+```
+
+Visualization: metrics and scatterplot
+
+```{r code03, message = FALSE, warning = FALSE, fig.align='center', fig.width=7, fig.height=3.5}
+eval_model(mod = mod_lm, df_train = daily_fluxes_train, df_test = daily_fluxes_test)
+```
+<center>
+*Figure 1. Evaluation of the linear regression model on the training and the test set.*
+</center>
+
+```{r code04, message = FALSE, warning = FALSE, fig.align='center', fig.width=7, fig.height=3.5}
+eval_model(mod = mod_knn, df_train = daily_fluxes_train, df_test = daily_fluxes_test)
+```
+<center>
+*Figure 2. Evaluation of the KNN model on the training and the test set.*
+</center>
+
+## Interpret observed differences in the context of the bias-variance trade-off
+
+### Why is the difference between the evaluation on the training and the test set larger for the KNN model than for the linear regression model?
+
+A linear regression model is simple and works well when the data follows a linear relationship. In contrast, a KNN model is better suited for more complex, non-linear patterns in the data. However, this flexibility makes KNN more sensitive — it may fit the training data too closely and struggle to generalize to new data. This leads to overfitting, where training performance is high but test performance drops. That’s why the difference between training and test results is larger for KNN than for linear regression. The choice of k in KNN plays a key role in reducing this gap and improving generalization.
+
+### Why does the evaluation on the test set indicate a better model performance of the KNN model than the linear regression model?
+
+As mentioned before, KNN is better suited for data that doesn't follow a straight-line (linear) pattern. In this case, the small difference between training and test metrics suggests that the relationship between GPP and environmental predictors may be non-linear. That helps explain why the KNN model performs slightly better on the test set than the linear regression model.
+
+### How would you position the KNN and the linear regression model along the spectrum of the bias-variance trade-off?
+
+Linear regression is a simple model, so it has high bias (it may miss patterns) but low variance (its predictions don’t change much with new data). On the other hand, KNN has low bias (it can fit complex patterns) but high variance (its predictions may change a lot depending on the data). So, KNN is more flexible but also more prone to overfitting unless carefully tuned (k selection).
+
+## Visualise temporal variations of observed and modelled GPP for both models, covering all available dates
+
+Figures 3 and 4 show the temporal variation of observed and modelled GPP using the linear regression model and the KNN model, respectively. In both cases, the models are able to capture the general seasonality of GPP fairly well.
+
+Although the performance metrics are quite similar for both models, some key differences are noticeable:
+
+- The linear model tends to predict negative GPP values, especially during periods with low productivity. This is not physically realistic, as GPP cannot be negative (not pretty sure about this when reading literature).
+- The KNN model avoids negative predictions and stays closer to the observed range at the lower end (zero).
+- However, neither model handles extreme high GPP values very well 
+
+```{r code05, message = FALSE, warning = FALSE, fig.align='center', fig.width=7, fig.height=3.5}
+daily_fluxes_mod_lm <- daily_fluxes |> drop_na()
+daily_fluxes_mod_lm$GPP_NT_VUT_REF_mod <- predict(mod_lm, newdata = daily_fluxes_mod_lm)
+
+daily_fluxes_lm <- merge(daily_fluxes,
+                         daily_fluxes_mod_lm[, c("TIMESTAMP", "GPP_NT_VUT_REF_mod")],
+                         by = "TIMESTAMP",
+                         all.x = TRUE)
+
+ggplot(data = daily_fluxes_lm, aes(x = TIMESTAMP)) + 
+  geom_point(aes(y = GPP_NT_VUT_REF), color = "black") + 
+  geom_point(aes(y = GPP_NT_VUT_REF_mod), color = "red") + 
+  theme_bw() + xlab("Time") + ylab("GPP")
+```
+<center>
+*Figure 3. Time series of observed and modeled (linear model) GPP.*
+</center>
+
+```{r code06, message = FALSE, warning = FALSE, fig.align='center', fig.width=7, fig.height=3.5}
+daily_fluxes_mod_knn <- daily_fluxes |> drop_na()
+daily_fluxes_mod_knn$GPP_NT_VUT_REF_mod <- predict(mod_knn, newdata = daily_fluxes_mod_knn)
+
+daily_fluxes_knn <- merge(daily_fluxes,
+                          daily_fluxes_mod_knn[, c("TIMESTAMP", "GPP_NT_VUT_REF_mod")],
+                          by = "TIMESTAMP",
+                          all.x = TRUE)
+
+ggplot(data = daily_fluxes_knn, aes(x = TIMESTAMP)) + 
+  geom_point(aes(y = GPP_NT_VUT_REF), color = "black") + 
+  geom_point(aes(y = GPP_NT_VUT_REF_mod), color = "red") + 
+  theme_bw() + xlab("Time") + ylab("GPP")
+```
+<center>
+*Figure 4. Time series of observed and modeled (KNN model) GPP.*
+</center>
+
+
+## The role of k
+
+### Explain your hypothesis of the role of k, referring to the bias-variance trade-off.
+
+The value of k in KNN models plays an important role because it controls how complex or simple the model is:
+
+- When k is small, the model becomes very flexible. It tries to fit the training data closely, which results in low bias. However, this also means the model can be too sensitive to noise in the training data, leading to high variance and poor generalization to new data.
+
+- When k is large, the model becomes smoother because it averages the values of many data points. This makes it less accurate on the training data (higher bias) but more stable on new data (lower variance). In this case, KNN starts to behave more like a simple model, similar to linear regression in terms of generalization, but it doesn't actually fit a line.
+
+Hypothesis: As k increases, training performance will decrease (higher bias), but test performance may improve up to a certain point (lower variance). The best test performance is expected at an intermediate value of k, where the model balances both well.
+
+### Test the hypothesis: is there an optimal k?
+
+To test the hypothesis, I created a function to evaluate how the MAE changes across different values of k in the KNN model, for both the training and test datasets. Figure 5 shows the results of this analysis for values of k ranging from 1 to 30.
+
+As expected, the results reflect the typical behavior associated with the bias-variance trade-off:
+
+- For small k values, both training and test MAE are high. This suggests overfitting, where the model is too flexible and sensitive to noise.
+- As k increases, the model becomes smoother, and both MAE values decrease and begin to converge.
+
+The resulting MAE vs. k plot clearly shows this trade-off, helping to visually identify regions of overfitting (low k) and underfitting (high k).
+
+To select the optimal k, I used a simple scoring method that combines both training and test performance:
+Score = Test MAE + ∣ Test MAE − Training MAE ∣
+
+This score favors values of k that have a low test error, and have similar performance on training and test sets, indicating good generalization. 
+
+The optimal k is chosen as the first local minimum of this score, the point where the model begins to lose generalization if k increases further. Based on this approach, the best value of k for this dataset is 13 (Figure 5).
+
+```{r code07, message = FALSE, warning = FALSE, fig.align='center', fig.width=7, fig.height=3.5}
+mae_k_res <- mae_k_tradeoff(ki = c(1:30),
+                            pp_recipe = pp,
+                            df = daily_fluxes_train |> drop_na(),
+                            df_train = daily_fluxes_train,
+                            df_test = daily_fluxes_test)
+
+ggplot(mae_k_res$mae_k) +
+  geom_line(aes(x = k, y = mae, col = sample), size = 1) +
+  geom_point(aes(x = k, y = mae, col = sample)) +
+  geom_vline(xintercept = mae_k_res$best_k) +
+  geom_text(aes(x  = mae_k_res$best_k  + 2, label = "best 'k'", y = 1.25)) +
+  theme_bw()
+```
+<center>
+*Figure 5. MAE values in training and test samples for different "k" in the KNN model.*
+</center>
+
+
+## Summary
+
+- The value of k in KNN strongly affects model performance by controlling the balance between bias and variance.
+- Low k values lead to overfitting, while high k values can cause underfitting.
+
+

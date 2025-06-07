@@ -12,7 +12,7 @@ rm(list = ls())
 
 ## Collaborative Work on Github
 
-I team up this excersise with Setareh Amini.
+I team up this exercise with Setareh Amini.
 
 * The repository I forked from Setareh: https://github.com/adrHuerta/re_paircoding_SetarehAdrian
 * My repository that Setareh forked: https://github.com/adrHuerta/adgs-8_code_management
