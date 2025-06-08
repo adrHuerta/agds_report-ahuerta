@@ -39,6 +39,8 @@ The target variable for modeling is Gross Primary Production (GPP), which is sto
 ```{r code01, message=FALSE, warning=FALSE}
 library(dplyr)
 library(ggplot2)
+library(readr)
+library(tidyr)
 
 flux_data <- readr::read_csv("../data-raw/df_for_stepwise_regression.csv")
 
